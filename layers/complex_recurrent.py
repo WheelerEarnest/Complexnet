@@ -4,11 +4,14 @@
 # Project: Complexnet
 #
 # ------------------------------------------------------------
+import warnings
+
 import numpy as np
 import keras.backend as K
 from keras import activations, initializers, regularizers, constraints
-from keras.layers import Layer, InputSpec, RNN, SimpleRNN
+from keras.layers import Layer, InputSpec, RNN, SimpleRNN, GRU, LSTM
 from util import c_elem_mult
+
 
 # TODO: create more robust initializers for complex valued weights
 
@@ -36,30 +39,30 @@ class SimpleCRNN(SimpleRNN):
                  **kwargs):
         # Note: theano backend does not support dropout
         cell = SimpleCRNNCell(units,
-                             activation=activation,
-                             use_bias=use_bias,
-                             kernel_initializer=kernel_initializer,
-                             recurrent_initializer=recurrent_initializer,
-                             bias_initializer=bias_initializer,
-                             kernel_regularizer=kernel_regularizer,
-                             recurrent_regularizer=recurrent_regularizer,
-                             bias_regularizer=bias_regularizer,
-                             kernel_constraint=kernel_constraint,
-                             recurrent_constraint=recurrent_constraint,
-                             bias_constraint=bias_constraint,
-                             dropout=dropout,
-                             recurrent_dropout=recurrent_dropout)
+                              activation=activation,
+                              use_bias=use_bias,
+                              kernel_initializer=kernel_initializer,
+                              recurrent_initializer=recurrent_initializer,
+                              bias_initializer=bias_initializer,
+                              kernel_regularizer=kernel_regularizer,
+                              recurrent_regularizer=recurrent_regularizer,
+                              bias_regularizer=bias_regularizer,
+                              kernel_constraint=kernel_constraint,
+                              recurrent_constraint=recurrent_constraint,
+                              bias_constraint=bias_constraint,
+                              dropout=dropout,
+                              recurrent_dropout=recurrent_dropout)
         super(SimpleCRNN, self).__init__(cell,
-                                        return_sequences=return_sequences,
-                                        return_state=return_state,
-                                        go_backwards=go_backwards,
-                                        stateful=stateful,
-                                        unroll=unroll,
-                                        **kwargs)
+                                         return_sequences=return_sequences,
+                                         return_state=return_state,
+                                         go_backwards=go_backwards,
+                                         stateful=stateful,
+                                         unroll=unroll,
+                                         **kwargs)
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
-class SimpleCRNNCell(Layer):
 
+class SimpleCRNNCell(Layer):
     def __init__(self, units,
                  activation='tanh',
                  use_bias=True,
@@ -188,6 +191,7 @@ class SimpleCRNNCell(Layer):
         base_config = super(SimpleCRNNCell, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+
 class CGRUCell(Layer):
     def __init__(self, units,
                  activation='tanh',
@@ -246,7 +250,7 @@ class CGRUCell(Layer):
         self.imaginary_kernel = self.add_weight(shape=(input_dim, self.units * 3),
                                                 name='imaginary_kernel',
                                                 initializer=self.kernel_initializer,
-                                                regularizer= self.kernel_regularizer,
+                                                regularizer=self.kernel_regularizer,
                                                 constraint=self.kernel_constraint)
         self.real_recurrent_kernel = self.add_weight(shape=(self.units, self.units * 3),
                                                      name='recurrent_real_kernel',
@@ -343,7 +347,7 @@ class CGRUCell(Layer):
     def call(self, inputs, states, training=None):
         h_tm1 = states[0]
 
-        #Todo: properly implement dropout masks
+        # Todo: properly implement dropout masks
 
         dp_mask = self._dropout_mask
         rec_dp_mask = self._recurrent_dropout_mask
@@ -382,7 +386,7 @@ class CGRUCell(Layer):
             cat_bias_h = None
             if self.use_bias:
                 cat_bias_z = K.concatenate([self.real_input_bias_z, self.imaginary_input_bias_z],
-                                      axis=0)
+                                           axis=0)
                 x_z = K.bias_add(x_z, cat_bias_z)
                 cat_bias_r = K.concatenate([self.real_input_bias_r, self.imaginary_input_bias_r],
                                            axis=0)
@@ -472,3 +476,383 @@ class CGRUCell(Layer):
                   'reset_after': self.reset_after}
         base_config = super(GRUCell, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class CGRU(GRU):
+    def __init__(self, units,
+                 activation='tanh',
+                 recurrent_activation='hard_sigmoid',
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
+                 bias_initializer='zeros',
+                 kernel_regularizer=None,
+                 recurrent_regularizer=None,
+                 bias_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 recurrent_constraint=None,
+                 bias_constraint=None,
+                 dropout=0.,
+                 recurrent_dropout=0.,
+                 implementation=1,
+                 return_sequences=False,
+                 return_state=False,
+                 go_backwards=False,
+                 stateful=False,
+                 unroll=False,
+                 reset_after=False,
+                 **kwargs):
+        if implementation == 2:
+            warnings.warn('`implementation=2 has not been implemented.')
+        if K.backend() == 'theano' and (dropout or recurrent_dropout):
+            warnings.warn(
+                'RNN dropout is no longer supported with the Theano backend '
+                'due to technical limitations. '
+                'You can either set `dropout` and `recurrent_dropout` to 0, '
+                'or use the TensorFlow backend.')
+            dropout = 0.
+            recurrent_dropout = 0.
+
+        cell = CGRUCell(units,
+                        activation=activation,
+                        recurrent_activation=recurrent_activation,
+                        use_bias=use_bias,
+                        kernel_initializer=kernel_initializer,
+                        recurrent_initializer=recurrent_initializer,
+                        bias_initializer=bias_initializer,
+                        kernel_regularizer=kernel_regularizer,
+                        recurrent_regularizer=recurrent_regularizer,
+                        bias_regularizer=bias_regularizer,
+                        kernel_constraint=kernel_constraint,
+                        recurrent_constraint=recurrent_constraint,
+                        bias_constraint=bias_constraint,
+                        dropout=dropout,
+                        recurrent_dropout=recurrent_dropout,
+                        implementation=implementation,
+                        reset_after=reset_after)
+        super(CGRU, self).__init__(cell,
+                                   return_sequences=return_sequences,
+                                   return_state=return_state,
+                                   go_backwards=go_backwards,
+                                   stateful=stateful,
+                                   unroll=unroll,
+                                   **kwargs)
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+
+
+class CLSTMCell(Layer):
+    def __init__(self, units,
+                 activation='tanh',
+                 recurrent_activation='hard_sigmoid',
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
+                 bias_initializer='zeros',
+                 unit_forget_bias=True,
+                 kernel_regularizer=None,
+                 recurrent_regularizer=None,
+                 bias_regularizer=None,
+                 kernel_constraint=None,
+                 recurrent_constraint=None,
+                 bias_constraint=None,
+                 dropout=0.,
+                 recurrent_dropout=0.,
+                 implementation=1,
+                 **kwargs):
+        super(CLSTMCell, self).__init__(**kwargs)
+        self.units = units
+        self.activation = activations.get(activation)
+        self.recurrent_activation = activations.get(recurrent_activation)
+        self.use_bias = use_bias
+
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.recurrent_initializer = initializers.get(recurrent_initializer)
+        self.bias_initializer = initializers.get(bias_initializer)
+        self.unit_forget_bias = unit_forget_bias
+
+        self.kernel_regularizer = regularizers.get(kernel_regularizer)
+        self.recurrent_regularizer = regularizers.get(recurrent_regularizer)
+        self.bias_regularizer = regularizers.get(bias_regularizer)
+
+        self.kernel_constraint = constraints.get(kernel_constraint)
+        self.recurrent_constraint = constraints.get(recurrent_constraint)
+        self.bias_constrain = constraints.get(bias_constraint)
+
+        self.dropout = min(1., max(0., dropout))
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.implementation = implementation
+        self.state_size = (2 * self.units, 2 * self.units)
+        self._dropout_mask = None
+        self._recurrent_dropout_mask = None
+
+    def build(self, input_shape):
+        input_dim = input_shape[-1]
+        self.real_kernel = self.add_weight(shape=(input_dim, self.units * 4),
+                                           name='real_kernel',
+                                           initializer=self.kernel_initializer,
+                                           regularizer=self.kernel_regularizer,
+                                           constraint=self.kernel_constraint)
+        self.imaginary_kernel = self.add_weight(shape=(input_dim, self.units * 4),
+                                                name='imaginary_kernel',
+                                                initializer=self.kernel_initializer,
+                                                regularizer=self.kernel_regularizer,
+                                                constraint=self.kernel_constraint)
+        self.real_recurrent_kernel = self.add_weight(shape=(self.units, self.units * 4),
+                                                     name='real_recurrent_kernel',
+                                                     initializer=self.recurrent_initializer,
+                                                     regularizer=self.recurrent_regularizer,
+                                                     constraint=self.recurrent_constraint)
+        self.imaginary_recurrent_kernel = self.add_weight(shape=(self.units, self.units * 4),
+                                                          name='imaginary_recurrent_kernel',
+                                                          initializer=self.recurrent_initializer,
+                                                          regularizer=self.recurrent_regularizer,
+                                                          constraint=self.recurrent_constraint)
+
+        if self.use_bias:
+            if self.unit_forget_bias:
+                def bias_initializer(_, *args, **kwargs):
+                    return K.concatenate([
+                        self.bias_initializer((self.units,), *args, **kwargs),
+                        initializers.Ones()((self.units,), *args, **kwargs),
+                        self.bias_initializer((self.units * 2,), *args, **kwargs),
+                    ])
+            else:
+                bias_initializer = self.bias_initializer
+            self.real_bias = self.add_weight(shape=(self.units * 4,),
+                                             name='real_bias',
+                                             initializer=bias_initializer,
+                                             regularizer=self.bias_regularizer,
+                                             constraint=self.bias_constraint)
+            self.imaginary_bias = self.add_weight(shape=(self.units * 4,),
+                                                  name='imaginary_bias',
+                                                  initializer=bias_initializer,
+                                                  regularizer=self.bias_regularizer,
+                                                  constraint=self.bias_constrain)
+        else:
+            self.real_bias = None
+            self.imaginary_bias = None
+        self.real_kernel_i = self.real_kernel[:, :self.units]
+        self.imaginary_kernel_i = self.imaginary_kernel[:, :self.units]
+        self.real_kernel_f = self.real_kernel[:, self.units: self.units * 2]
+        self.imaginary_kernel_f = self.imaginary_kernel[:, self.units: self.units * 2]
+        self.real_kernel_c = self.real_kernel[:, self.units * 2: self.units * 3]
+        self.imaginary_kernel_c = self.imaginary_kernel[:, self.units * 2: self.units * 3]
+        self.real_kernel_o = self.real_kernel[:, self.units * 3:]
+        self.imaginary_kernel_o = self.imaginary_kernel[:, self.units * 3:]
+
+        self.real_recurrent_kernel_i = self.real_recurrent_kernel[:, :self.units]
+        self.imaginary_recurrent_kernel_i = self.imaginary_recurrent_kernel[:, :self.units]
+        self.real_recurrent_kernel_f = self.real_recurrent_kernel[:, self.units: self.units * 2]
+        self.imaginary_recurrent_kernel_f = self.imaginary_recurrent_kernel[:, self.units: self.units * 2]
+        self.real_recurrent_kernel_c = self.real_recurrent_kernel[:, self.units * 2: self.units * 3]
+        self.imaginary_recurrent_kernel_c = self.imaginary_recurrent_kernel[:, self.units * 2: self.units * 3]
+        self.real_recurrent_kernel_o = self.real_recurrent_kernel[:, self.units * 3:]
+        self.imaginary_recurrent_kernel_o = self.imaginary_recurrent_kernel[:, self.units * 3:]
+
+        if self.use_bias:
+            self.real_bias_i = self.real_bias[:self.units]
+            self.imaginary_bias_i = self.imaginary_bias[:self.units]
+            self.real_bias_f = self.real_bias[self.units: self.units * 2]
+            self.imaginary_bias_f = self.imaginary_bias[self.units: self.units * 2]
+            self.real_bias_c = self.real_bias[self.units * 2: self.units * 3]
+            self.imaginary_bias_c = self.imaginary_bias[self.units * 2: self.units * 3]
+            self.real_bias_o = self.real_bias[self.units * 3:]
+            self.imaginary_bias_o = self.imaginary_bias[self.units * 3:]
+        else:
+            self.real_bias_i = None
+            self.imaginary_bias_i = None
+            self.real_bias_f = None
+            self.imaginary_bias_f = None
+            self.real_bias_c = None
+            self.imaginary_bias_c = None
+            self.real_bias_o = None
+            self.imaginary_bias_o = None
+        self.built = True
+
+    def call(self, inputs, states, training=None):
+        # Todo: properly implement dropout masks
+
+        dp_mask = self._dropout_mask
+        rec_dp_mask = self._recurrent_dropout_mask
+
+        h_tm1 = states[0]
+        c_tm1 = states[1]
+
+        if self.implementation == 1:
+            if 0 < self.dropout < 1.:
+                inputs_i = inputs * dp_mask[0]
+                inputs_f = inputs * dp_mask[1]
+                inputs_c = inputs * dp_mask[2]
+                inputs_o = inputs * dp_mask[3]
+            else:
+                inputs_i = inputs
+                inputs_f = inputs
+                inputs_c = inputs
+                inputs_o = inputs
+            cat_kernel_i = K.concatenate(
+                [K.concatenate([self.real_kernel_i, -self.imaginary_kernel_i], axis=-1),
+                 K.concatenate([self.imaginary_kernel_i, self.real_kernel_i], axis=-1)],
+                axis=0
+            )
+            cat_kernel_f = K.concatenate(
+                [K.concatenate([self.real_kernel_f, -self.imaginary_kernel_f], axis=-1),
+                 K.concatenate([self.imaginary_kernel_f, self.real_kernel_f], axis=-1)],
+                axis=0
+            )
+            cat_kernel_c = K.concatenate(
+                [K.concatenate([self.real_kernel_c, -self.imaginary_kernel_c], axis=-1),
+                 K.concatenate([self.imaginary_kernel_c, self.real_kernel_c], axis=-1)],
+                axis=0
+            )
+            cat_kernel_o = K.concatenate(
+                [K.concatenate([self.real_kernel_o, -self.imaginary_kernel_o], axis=-1),
+                 K.concatenate([self.imaginary_kernel_o, self.real_kernel_o], axis=-1)],
+                axis=0
+            )
+
+            x_i = K.dot(inputs_i, cat_kernel_i)
+            x_f = K.dot(inputs_f, cat_kernel_f)
+            x_c = K.dot(inputs_c, cat_kernel_c)
+            x_o = K.dot(inputs_o, cat_kernel_o)
+            if self.use_bias:
+                cat_bias_i = K.concatenate([self.real_input_bias_i, self.imaginary_input_bias_i],
+                                           axis=0)
+                x_i = K.bias_add(x_i, cat_bias_i)
+                cat_bias_f = K.concatenate([self.real_input_bias_f, self.imaginary_input_bias_f],
+                                           axis=0)
+                x_f = K.bias_add(x_f, cat_bias_f)
+                cat_bias_c = K.concatenate([self.real_input_bias_c, self.imaginary_input_bias_c],
+                                           axis=0)
+                x_c = K.bias_add(x_c, cat_bias_c)
+                cat_bias_o = K.concatenate([self.real_input_bias_o, self.imaginary_input_bias_o],
+                                           axis=0)
+                x_o = K.bias_add(x_o, cat_bias_o)
+
+            if 0 < self.recurrent_dropout < 1.:
+                h_tm1_i = h_tm1 * rec_dp_mask[0]
+                h_tm1_f = h_tm1 * rec_dp_mask[1]
+                h_tm1_c = h_tm1 * rec_dp_mask[2]
+                h_tm1_o = h_tm1 * rec_dp_mask[3]
+            else:
+                h_tm1_i = h_tm1
+                h_tm1_f = h_tm1
+                h_tm1_c = h_tm1
+                h_tm1_o = h_tm1
+            cat_recurrent_kernel_i = K.concatenate(
+                [K.concatenate([self.real_recurrent_kernel_i, -self.imaginary_recurrent_kernel_i], axis=-1),
+                 K.concatenate([self.imaginary_recurrent_kernel_i, self.real_recurrent_kernel_i], axis=-1)],
+                axis=0
+            )
+            cat_recurrent_kernel_f = K.concatenate(
+                [K.concatenate([self.real_recurrent_kernel_f, -self.imaginary_recurrent_kernel_f], axis=-1),
+                 K.concatenate([self.imaginary_recurrent_kernel_f, self.real_recurrent_kernel_f], axis=-1)],
+                axis=0
+            )
+            cat_recurrent_kernel_c = K.concatenate(
+                [K.concatenate([self.real_recurrent_kernel_c, -self.imaginary_recurrent_kernel_c], axis=-1),
+                 K.concatenate([self.imaginary_recurrent_kernel_c, self.real_recurrent_kernel_c], axis=-1)],
+                axis=0
+            )
+            cat_recurrent_kernel_o = K.concatenate(
+                [K.concatenate([self.real_recurrent_kernel_o, -self.imaginary_recurrent_kernel_o], axis=-1),
+                 K.concatenate([self.imaginary_recurrent_kernel_o, self.real_recurrent_kernel_o], axis=-1)],
+                axis=0
+            )
+            i = self.recurrent_activation(x_i + K.dot(h_tm1_i, cat_recurrent_kernel_i))
+            f = self.recurrent_activation(x_f + K.dot(h_tm1_f, cat_recurrent_kernel_f))
+            c = c_elem_mult(f, c_tm1, self.units) \
+                + c_elem_mult(i, self.activation(x_c + K.dot(h_tm1_f,
+                                                             cat_recurrent_kernel_c)), self.units)
+            o = self.recurrent_activation(x_o + K.dot(h_tm1_o, cat_recurrent_kernel_o))
+        else:
+            # TODO: implement the second version as seen in keras
+            None
+        h = o * self.activation(c)
+        if 0 < self.dropout + self.recurrent_dropout:
+            if training is None:
+                h._uses_learning_phase = True
+        return h, [h, c]
+    def get_config(self):
+        config = {'units': self.units,
+                  'activation': activations.serialize(self.activation),
+                  'recurrent_activation': activations.serialize(self.recurrent_activation),
+                  'use_bias': self.use_bias,
+                  'kernel_initializer': initializers.serialize(self.kernel_initializer),
+                  'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
+                  'bias_initializer': initializers.serialize(self.bias_initializer),
+                  'unit_forget_bias': self.unit_forget_bias,
+                  'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+                  'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
+                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                  'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
+                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'dropout': self.dropout,
+                  'recurrent_dropout': self.recurrent_dropout,
+                  'implementation': self.implementation}
+        base_config = super(CLSTMCell, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class CLSTM(LSTM):
+    def __init__(self, units,
+                 activation='tanh',
+                 recurrent_activation='hard_sigmoid',
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
+                 bias_initializer='zeros',
+                 kernel_regularizer=None,
+                 recurrent_regularizer=None,
+                 bias_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 recurrent_constraint=None,
+                 bias_constraint=None,
+                 dropout=0.,
+                 recurrent_dropout=0.,
+                 implementation=1,
+                 return_sequences=False,
+                 return_state=False,
+                 go_backwards=False,
+                 stateful=False,
+                 unroll=False,
+                 reset_after=False,
+                 **kwargs):
+        if implementation == 2:
+            warnings.warn('`implementation=2 has not been implemented.')
+        if K.backend() == 'theano' and (dropout or recurrent_dropout):
+            warnings.warn(
+                'RNN dropout is no longer supported with the Theano backend '
+                'due to technical limitations. '
+                'You can either set `dropout` and `recurrent_dropout` to 0, '
+                'or use the TensorFlow backend.')
+            dropout = 0.
+            recurrent_dropout = 0.
+
+        cell = CLSTMCell(units,
+                        activation=activation,
+                        recurrent_activation=recurrent_activation,
+                        use_bias=use_bias,
+                        kernel_initializer=kernel_initializer,
+                        recurrent_initializer=recurrent_initializer,
+                        bias_initializer=bias_initializer,
+                        kernel_regularizer=kernel_regularizer,
+                        recurrent_regularizer=recurrent_regularizer,
+                        bias_regularizer=bias_regularizer,
+                        kernel_constraint=kernel_constraint,
+                        recurrent_constraint=recurrent_constraint,
+                        bias_constraint=bias_constraint,
+                        dropout=dropout,
+                        recurrent_dropout=recurrent_dropout,
+                        implementation=implementation,
+                        reset_after=reset_after)
+        super(CLSTM, self).__init__(cell,
+                                   return_sequences=return_sequences,
+                                   return_state=return_state,
+                                   go_backwards=go_backwards,
+                                   stateful=stateful,
+                                   unroll=unroll,
+                                   **kwargs)
+        self.activity_regularizer = regularizers.get(activity_regularizer)
