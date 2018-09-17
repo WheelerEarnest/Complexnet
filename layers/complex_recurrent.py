@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 import keras.backend as K
 from keras import activations, initializers, regularizers, constraints
-from keras.layers import Layer, InputSpec, RNN, SimpleRNN, GRU, LSTM
+from keras.layers import Layer, InputSpec, RNN, SimpleRNN, GRU, LSTM, _generate_dropout_mask
 from util import c_elem_mult
 
 
@@ -138,7 +138,27 @@ class SimpleCRNNCell(Layer):
 
     def call(self, inputs, states, training=None):
         prev_output = states[0]
-        # Todo: properly implement dropout masks to accomidate the complex values
+        # Dropout is a bit tricky here: we really only want to create a mask for half of the input and then duplicate and concatenate it,
+        # because of how complex numbers are represented here. In other words, we make a mask for the real component and then
+        # duplicate it for the imaginary component
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            input_size = K.int_shape(inputs)[-1] // 2
+            self._dropout_mask = _generate_dropout_mask(
+                K.ones_like(inputs[:, :input_size]),
+                self.dropout,
+                training=training,
+                count=4)
+            self._dropout_mask = [K.concatenate([mask, mask]) for mask in self._dropout_mask]
+        if (0 < self.recurrent_dropout < 1 and
+            self._recurrent_dropout_mask is None):
+            state_size = K.int_shape(states[0])[-1] // 2
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                K.ones_like(states[0][:, :state_size]),
+                self.recurrent_dropout,
+                training=training,
+                count=4
+            )
+            self._recurrent_dropout_mask = [K.concatenate([mask, mask]) for mask in self._recurrent_dropout_mask]
 
         dp_mask = self._dropout_mask
         rec_dp_mask = self._recurrent_dropout_mask
@@ -348,6 +368,27 @@ class CGRUCell(Layer):
         h_tm1 = states[0]
 
         # Todo: properly implement dropout masks
+        # Dropout is a bit tricky here: we really only want to create a mask for half of the input and then duplicate and concatenate it,
+        # because of how complex numbers are represented here. In other words, we make a mask for the real component and then
+        # duplicate it for the imaginary component
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            input_size = K.int_shape(inputs)[-1] // 2
+            self._dropout_mask = _generate_dropout_mask(
+                K.ones_like(inputs[:, :input_size]),
+                self.dropout,
+                training=training,
+                count=4)
+            self._dropout_mask = [K.concatenate([mask, mask]) for mask in self._dropout_mask]
+        if (0 < self.recurrent_dropout < 1 and
+            self._recurrent_dropout_mask is None):
+            state_size = K.int_shape(states[0])[-1] // 2
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                K.ones_like(states[0][:, :state_size]),
+                self.recurrent_dropout,
+                training=training,
+                count=4
+            )
+            self._recurrent_dropout_mask = [K.concatenate([mask, mask]) for mask in self._recurrent_dropout_mask]
 
         dp_mask = self._dropout_mask
         rec_dp_mask = self._recurrent_dropout_mask
@@ -671,7 +712,29 @@ class CLSTMCell(Layer):
         self.built = True
 
     def call(self, inputs, states, training=None):
-        # Todo: properly implement dropout masks
+
+        # Dropout is a bit tricky here: we really only want to create a mask for half of the input and then duplicate and concatenate it,
+        # because of how complex numbers are represented here. In other words, we make a mask for the real component and then
+        # duplicate it for the imaginary component
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            input_size = K.int_shape(inputs)[-1] // 2
+            self._dropout_mask = _generate_dropout_mask(
+                K.ones_like(inputs[:, :input_size]),
+                self.dropout,
+                training=training,
+                count=4)
+            self._dropout_mask = [K.concatenate([mask, mask]) for mask in self._dropout_mask]
+        if (0 < self.recurrent_dropout < 1 and
+            self._recurrent_dropout_mask is None):
+            state_size = K.int_shape(states[0])[-1] // 2
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                K.ones_like(states[0][:, :state_size]),
+                self.recurrent_dropout,
+                training=training,
+                count=4
+            )
+            self._recurrent_dropout_mask = [K.concatenate([mask, mask]) for mask in self._recurrent_dropout_mask]
+
 
         dp_mask = self._dropout_mask
         rec_dp_mask = self._recurrent_dropout_mask
@@ -762,13 +825,13 @@ class CLSTMCell(Layer):
             i = self.recurrent_activation(x_i + K.dot(h_tm1_i, cat_recurrent_kernel_i))
             f = self.recurrent_activation(x_f + K.dot(h_tm1_f, cat_recurrent_kernel_f))
             c = c_elem_mult(f, c_tm1, self.units) \
-                + c_elem_mult(i, self.activation(x_c + K.dot(h_tm1_f,
+                + c_elem_mult(i, self.activation(x_c + K.dot(h_tm1_c,
                                                              cat_recurrent_kernel_c)), self.units)
             o = self.recurrent_activation(x_o + K.dot(h_tm1_o, cat_recurrent_kernel_o))
         else:
             # TODO: implement the second version as seen in keras
             None
-        h = o * self.activation(c)
+        h = c_elem_mult(o, self.activation(c), self.units)
         if 0 < self.dropout + self.recurrent_dropout:
             if training is None:
                 h._uses_learning_phase = True
@@ -856,3 +919,5 @@ class CLSTM(LSTM):
                                    unroll=unroll,
                                    **kwargs)
         self.activity_regularizer = regularizers.get(activity_regularizer)
+
+
