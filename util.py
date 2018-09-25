@@ -20,6 +20,11 @@ def c_elem_mult(x, y, units):
     return K.concatenate([real, imag], axis = -1)
 
 def complex_to_float(a):
+    """
+
+    :param a: Input expected to be in the shape (units, timesteps)
+    :return: float representation, shape (units*2, timesteps)
+    """
     # Converts numpy data that is complex64 or complex128 and makes it the float representation
     # so a complex vector would look like [real, imaginary]
     assert a.dtype is np.dtype('complex64') or a.dtype is np.dtype('complex128')

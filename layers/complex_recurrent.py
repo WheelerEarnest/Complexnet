@@ -5,17 +5,16 @@
 #
 # ------------------------------------------------------------
 import warnings
-
+import keras
 import numpy as np
 import keras.backend as K
 from keras import activations, initializers, regularizers, constraints
-from keras.layers import Layer, InputSpec, RNN, SimpleRNN, GRU, LSTM, _generate_dropout_mask
+from keras.layers import Layer, InputSpec, RNN, SimpleRNN, GRU, LSTM
+from keras.layers.recurrent import  _generate_dropout_mask
 from util import c_elem_mult
-
-
 # TODO: create more robust initializers for complex valued weights
 
-class SimpleCRNN(SimpleRNN):
+class SimpleCRNN(RNN):
     def __init__(self, units,
                  activation='tanh',
                  use_bias=True,
@@ -61,6 +60,101 @@ class SimpleCRNN(SimpleRNN):
                                          **kwargs)
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
+    def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
+        return super(SimpleCRNN, self).call(inputs,
+                                            mask=mask,
+                                            training=training,
+                                            initial_state=initial_state)
+    @property
+    def units(self):
+        return self.cell.units
+
+    @property
+    def activation(self):
+        return self.cell.activation
+
+    @property
+    def use_bias(self):
+        return self.cell.use_bias
+
+    @property
+    def kernel_initializer(self):
+        return self.cell.kernel_initializer
+
+    @property
+    def recurrent_initializer(self):
+        return self.cell.recurrent_initializer
+
+    @property
+    def bias_initializer(self):
+        return self.cell.bias_initializer
+
+    @property
+    def kernel_regularizer(self):
+        return self.cell.kernel_regularizer
+
+    @property
+    def recurrent_regularizer(self):
+        return self.cell.recurrent_regularizer
+
+    @property
+    def bias_regularizer(self):
+        return self.cell.bias_regularizer
+
+    @property
+    def kernel_constraint(self):
+        return self.cell.kernel_constraint
+
+    @property
+    def recurrent_constraint(self):
+        return self.cell.recurrent_constraint
+
+    @property
+    def bias_constraint(self):
+        return self.cell.bias_constraint
+
+    @property
+    def dropout(self):
+        return self.cell.dropout
+
+    @property
+    def recurrent_dropout(self):
+        return self.cell.recurrent_dropout
+
+    def get_config(self):
+        config = {'units': self.units,
+                  'activation': activations.serialize(self.activation),
+                  'use_bias': self.use_bias,
+                  'kernel_initializer':
+                      initializers.serialize(self.kernel_initializer),
+                  'recurrent_initializer':
+                      initializers.serialize(self.recurrent_initializer),
+                  'bias_initializer': initializers.serialize(self.bias_initializer),
+                  'kernel_regularizer':
+                      regularizers.serialize(self.kernel_regularizer),
+                  'recurrent_regularizer':
+                      regularizers.serialize(self.recurrent_regularizer),
+                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'activity_regularizer':
+                      regularizers.serialize(self.activity_regularizer),
+                  'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                  'recurrent_constraint':
+                      constraints.serialize(self.recurrent_constraint),
+                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'dropout': self.dropout,
+                  'recurrent_dropout': self.recurrent_dropout}
+        base_config = super(SimpleCRNN, self).get_config()
+        del base_config['cell']
+        return dict(list(base_config.items()) + list(config.items()))
+
+    @classmethod
+    def from_config(cls, config):
+        if 'implementation' in config:
+            config.pop('implementation')
+        return cls(**config)
+
 
 class SimpleCRNNCell(Layer):
     def __init__(self, units,
@@ -96,21 +190,22 @@ class SimpleCRNNCell(Layer):
         self.bias_constraint = constraints.get(bias_constraint)
 
         self.dropout = min(1., max(0., dropout))
-        si
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.state_size = self.units * 2
-        # Todo: implement a dropout mask that properly drops complex values
+        self.output_size = self.units * 2
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
 
     def build(self, input_shape):
 
-        self.real_kernel = self.add_weight(shape=(input_shape[-1], self.units),
+        input_dim = input_shape[-1] // 2
+
+        self.real_kernel = self.add_weight(shape=(input_dim, self.units),
                                            name='real_kernel',
                                            initializer=self.kernel_initializer,
                                            regularizer=self.kernel_regularizer,
                                            constraint=self.kernel_constraint)
-        self.imaginary_kernel = self.add_weight(shape=(input_shape[-1], self.units),
+        self.imaginary_kernel = self.add_weight(shape=(input_dim, self.units),
                                                 name='imaginary_kernel',
                                                 initializer=self.kernel_initializer,
                                                 regularizer=self.kernel_regularizer,
@@ -254,6 +349,7 @@ class CGRUCell(Layer):
         self.implementation = implementation
         self.reset_after = reset_after
         # Remember: the state size is doubled because of the imaginary component
+        self.output_size = self.units * 2
         self.state_size = self.units * 2
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
@@ -261,7 +357,7 @@ class CGRUCell(Layer):
     def build(self, input_shape):
         # We need to make sure that the input is in the correct complex format
         assert input_shape[-1] % 2 == 0
-        input_dim = input_shape[-1]
+        input_dim = input_shape[-1] // 2
         self.real_kernel = self.add_weight(shape=(input_dim, self.units * 3),
                                            name='real_kernel',
                                            initializer=self.kernel_initializer,
@@ -515,11 +611,11 @@ class CGRUCell(Layer):
                   'recurrent_dropout': self.recurrent_dropout,
                   'implementation': self.implementation,
                   'reset_after': self.reset_after}
-        base_config = super(GRUCell, self).get_config()
+        base_config = super(CGRUCell, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class CGRU(GRU):
+class CGRU(RNN):
     def __init__(self, units,
                  activation='tanh',
                  recurrent_activation='hard_sigmoid',
@@ -581,6 +677,102 @@ class CGRU(GRU):
                                    **kwargs)
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
+        def call(self, inputs, mask=None, training=None, initial_state=None):
+            self.cell._dropout_mask = None
+            self.cell._recurrent_dropout_mask = None
+            return super(CGRU, self).call(inputs,
+                                                mask=mask,
+                                                training=training,
+                                                initial_state=initial_state)
+
+        @property
+        def units(self):
+            return self.cell.units
+
+        @property
+        def activation(self):
+            return self.cell.activation
+
+        @property
+        def use_bias(self):
+            return self.cell.use_bias
+
+        @property
+        def kernel_initializer(self):
+            return self.cell.kernel_initializer
+
+        @property
+        def recurrent_initializer(self):
+            return self.cell.recurrent_initializer
+
+        @property
+        def bias_initializer(self):
+            return self.cell.bias_initializer
+
+        @property
+        def kernel_regularizer(self):
+            return self.cell.kernel_regularizer
+
+        @property
+        def recurrent_regularizer(self):
+            return self.cell.recurrent_regularizer
+
+        @property
+        def bias_regularizer(self):
+            return self.cell.bias_regularizer
+
+        @property
+        def kernel_constraint(self):
+            return self.cell.kernel_constraint
+
+        @property
+        def recurrent_constraint(self):
+            return self.cell.recurrent_constraint
+
+        @property
+        def bias_constraint(self):
+            return self.cell.bias_constraint
+
+        @property
+        def dropout(self):
+            return self.cell.dropout
+
+        @property
+        def recurrent_dropout(self):
+            return self.cell.recurrent_dropout
+
+        def get_config(self):
+            config = {'units': self.units,
+                      'activation': activations.serialize(self.activation),
+                      'use_bias': self.use_bias,
+                      'kernel_initializer':
+                          initializers.serialize(self.kernel_initializer),
+                      'recurrent_initializer':
+                          initializers.serialize(self.recurrent_initializer),
+                      'bias_initializer': initializers.serialize(self.bias_initializer),
+                      'kernel_regularizer':
+                          regularizers.serialize(self.kernel_regularizer),
+                      'recurrent_regularizer':
+                          regularizers.serialize(self.recurrent_regularizer),
+                      'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                      'activity_regularizer':
+                          regularizers.serialize(self.activity_regularizer),
+                      'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                      'recurrent_constraint':
+                          constraints.serialize(self.recurrent_constraint),
+                      'bias_constraint': constraints.serialize(self.bias_constraint),
+                      'dropout': self.dropout,
+                      'recurrent_dropout': self.recurrent_dropout}
+            base_config = super(CGRU, self).get_config()
+            del base_config['cell']
+            return dict(list(base_config.items()) + list(config.items()))
+
+        @classmethod
+        def from_config(cls, config):
+            if 'implementation' in config:
+                config.pop('implementation')
+            return cls(**config)
+
 
 class CLSTMCell(Layer):
     def __init__(self, units,
@@ -624,11 +816,12 @@ class CLSTMCell(Layer):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.implementation = implementation
         self.state_size = (2 * self.units, 2 * self.units)
+        self.output_size = 2 * self.units
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
 
     def build(self, input_shape):
-        input_dim = input_shape[-1]
+        input_dim = input_shape[-1] // 2
         self.real_kernel = self.add_weight(shape=(input_dim, self.units * 4),
                                            name='real_kernel',
                                            initializer=self.kernel_initializer,
@@ -858,7 +1051,7 @@ class CLSTMCell(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class CLSTM(LSTM):
+class CLSTM(RNN):
     def __init__(self, units,
                  activation='tanh',
                  recurrent_activation='hard_sigmoid',
@@ -919,5 +1112,101 @@ class CLSTM(LSTM):
                                    unroll=unroll,
                                    **kwargs)
         self.activity_regularizer = regularizers.get(activity_regularizer)
+
+        def call(self, inputs, mask=None, training=None, initial_state=None):
+            self.cell._dropout_mask = None
+            self.cell._recurrent_dropout_mask = None
+            return super(CLSTM, self).call(inputs,
+                                                mask=mask,
+                                                training=training,
+                                                initial_state=initial_state)
+
+        @property
+        def units(self):
+            return self.cell.units
+
+        @property
+        def activation(self):
+            return self.cell.activation
+
+        @property
+        def use_bias(self):
+            return self.cell.use_bias
+
+        @property
+        def kernel_initializer(self):
+            return self.cell.kernel_initializer
+
+        @property
+        def recurrent_initializer(self):
+            return self.cell.recurrent_initializer
+
+        @property
+        def bias_initializer(self):
+            return self.cell.bias_initializer
+
+        @property
+        def kernel_regularizer(self):
+            return self.cell.kernel_regularizer
+
+        @property
+        def recurrent_regularizer(self):
+            return self.cell.recurrent_regularizer
+
+        @property
+        def bias_regularizer(self):
+            return self.cell.bias_regularizer
+
+        @property
+        def kernel_constraint(self):
+            return self.cell.kernel_constraint
+
+        @property
+        def recurrent_constraint(self):
+            return self.cell.recurrent_constraint
+
+        @property
+        def bias_constraint(self):
+            return self.cell.bias_constraint
+
+        @property
+        def dropout(self):
+            return self.cell.dropout
+
+        @property
+        def recurrent_dropout(self):
+            return self.cell.recurrent_dropout
+
+        def get_config(self):
+            config = {'units': self.units,
+                      'activation': activations.serialize(self.activation),
+                      'use_bias': self.use_bias,
+                      'kernel_initializer':
+                          initializers.serialize(self.kernel_initializer),
+                      'recurrent_initializer':
+                          initializers.serialize(self.recurrent_initializer),
+                      'bias_initializer': initializers.serialize(self.bias_initializer),
+                      'kernel_regularizer':
+                          regularizers.serialize(self.kernel_regularizer),
+                      'recurrent_regularizer':
+                          regularizers.serialize(self.recurrent_regularizer),
+                      'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                      'activity_regularizer':
+                          regularizers.serialize(self.activity_regularizer),
+                      'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                      'recurrent_constraint':
+                          constraints.serialize(self.recurrent_constraint),
+                      'bias_constraint': constraints.serialize(self.bias_constraint),
+                      'dropout': self.dropout,
+                      'recurrent_dropout': self.recurrent_dropout}
+            base_config = super(CLSTM, self).get_config()
+            del base_config['cell']
+            return dict(list(base_config.items()) + list(config.items()))
+
+        @classmethod
+        def from_config(cls, config):
+            if 'implementation' in config:
+                config.pop('implementation')
+            return cls(**config)
 
 
