@@ -5,15 +5,16 @@
 #
 # ------------------------------------------------------------
 import warnings
-import keras
-import numpy as np
+
 import keras.backend as K
 from keras import activations, initializers, regularizers, constraints
-from keras.layers import Layer, InputSpec, RNN, SimpleRNN, GRU, LSTM
-from keras.layers.recurrent import  _generate_dropout_mask
-from util import c_elem_mult
-# TODO: create more robust initializers for complex valued weights
+from keras.layers import Layer, RNN
+from keras.layers.recurrent import _generate_dropout_mask
 
+from complexnet.util import c_elem_mult
+
+
+# TODO: create more robust initializers for complex valued weights
 class SimpleCRNN(RNN):
     def __init__(self, units,
                  activation='tanh',
