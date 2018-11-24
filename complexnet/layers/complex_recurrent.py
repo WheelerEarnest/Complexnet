@@ -1075,7 +1075,6 @@ class CLSTM(RNN):
                  go_backwards=False,
                  stateful=False,
                  unroll=False,
-                 reset_after=False,
                  **kwargs):
         if implementation == 2:
             warnings.warn('`implementation=2 has not been implemented.')
@@ -1103,8 +1102,7 @@ class CLSTM(RNN):
                         bias_constraint=bias_constraint,
                         dropout=dropout,
                         recurrent_dropout=recurrent_dropout,
-                        implementation=implementation,
-                        reset_after=reset_after)
+                        implementation=implementation)
         super(CLSTM, self).__init__(cell,
                                    return_sequences=return_sequences,
                                    return_state=return_state,
