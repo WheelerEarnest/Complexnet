@@ -12,7 +12,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="complexnet",
-    version="0.1.2",
+    version="0.1.5",
     author="Wheeler Earnest",
     author_email="jwheelerearnest@gmail.com",
     description="complex keras layers",

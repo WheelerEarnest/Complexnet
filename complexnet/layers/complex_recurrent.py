@@ -811,7 +811,7 @@ class CLSTMCell(Layer):
 
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.recurrent_constraint = constraints.get(recurrent_constraint)
-        self.bias_constrain = constraints.get(bias_constraint)
+        self.bias_constraint = constraints.get(bias_constraint)
 
         self.dropout = min(1., max(0., dropout))
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
@@ -863,7 +863,7 @@ class CLSTMCell(Layer):
                                                   name='imaginary_bias',
                                                   initializer=bias_initializer,
                                                   regularizer=self.bias_regularizer,
-                                                  constraint=self.bias_constrain)
+                                                  constraint=self.bias_constraint)
         else:
             self.real_bias = None
             self.imaginary_bias = None
@@ -973,16 +973,16 @@ class CLSTMCell(Layer):
             x_c = K.dot(inputs_c, cat_kernel_c)
             x_o = K.dot(inputs_o, cat_kernel_o)
             if self.use_bias:
-                cat_bias_i = K.concatenate([self.real_input_bias_i, self.imaginary_input_bias_i],
+                cat_bias_i = K.concatenate([self.real_bias_i, self.imaginary_bias_i],
                                            axis=0)
                 x_i = K.bias_add(x_i, cat_bias_i)
-                cat_bias_f = K.concatenate([self.real_input_bias_f, self.imaginary_input_bias_f],
+                cat_bias_f = K.concatenate([self.real_bias_f, self.imaginary_bias_f],
                                            axis=0)
                 x_f = K.bias_add(x_f, cat_bias_f)
-                cat_bias_c = K.concatenate([self.real_input_bias_c, self.imaginary_input_bias_c],
+                cat_bias_c = K.concatenate([self.real_bias_c, self.imaginary_bias_c],
                                            axis=0)
                 x_c = K.bias_add(x_c, cat_bias_c)
-                cat_bias_o = K.concatenate([self.real_input_bias_o, self.imaginary_input_bias_o],
+                cat_bias_o = K.concatenate([self.real_bias_o, self.imaginary_bias_o],
                                            axis=0)
                 x_o = K.bias_add(x_o, cat_bias_o)
 
