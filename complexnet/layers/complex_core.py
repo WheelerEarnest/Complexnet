@@ -8,9 +8,7 @@ import numpy as np
 import keras.backend as kb
 from keras.layers import Layer, InputSpec
 from keras import activations, initializers, regularizers, constraints
-# from tensorflow.python.keras import backend as k
-# from tensorflow.python.keras.layers import Layer, InputSpec
-# from tensorflow.python.keras import activations, initializers, regularizers, constraints
+
 
 
 class CDense(Layer):
@@ -105,6 +103,10 @@ class CDense(Layer):
             constraint=self.kernel_constraint
         )
 
+        self.kernel = kb.concatenate(
+            [kb.concatenate([self.real_kernel, -self.imag_kernel], axis=-1),
+             kb.concatenate([self.imag_kernel, self.real_kernel], axis=-1)], axis=0)
+
         if self.use_bias:
             self.bias = self.add_weight(
                 name='bias',
@@ -120,22 +122,8 @@ class CDense(Layer):
         self.built = True
 
     def call(self, inputs, **kwargs):
-        kernels_4_real = kb.concatenate(
-            [self.real_kernel, -self.imag_kernel],
-            axis=-1
-        )
 
-        kernels_4_imag = kb.concatenate(
-            [self.imag_kernel, self.real_kernel],
-            axis=-1
-        )
-
-        cat_kernel = kb.concatenate(
-            [kernels_4_real, kernels_4_imag],
-            axis=0
-        )
-
-        output = kb.dot(inputs, cat_kernel)
+        output = kb.dot(inputs, self.kernel)
 
         if self.use_bias:
             output = kb.bias_add(output, self.bias)
