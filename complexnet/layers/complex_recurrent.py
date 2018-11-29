@@ -878,40 +878,96 @@ class CLSTMCell(Layer):
             self.imaginary_bias = None
         self.real_kernel_i = self.real_kernel[:, :self.units]
         self.imaginary_kernel_i = self.imaginary_kernel[:, :self.units]
+        self.cat_kernel_i = K.concatenate(
+            [K.concatenate([self.real_kernel_i, -self.imaginary_kernel_i], axis=-1),
+             K.concatenate([self.imaginary_kernel_i, self.real_kernel_i], axis=-1)],
+            axis=0
+        )
         self.real_kernel_f = self.real_kernel[:, self.units: self.units * 2]
         self.imaginary_kernel_f = self.imaginary_kernel[:, self.units: self.units * 2]
+        self.cat_kernel_f = K.concatenate(
+            [K.concatenate([self.real_kernel_f, -self.imaginary_kernel_f], axis=-1),
+             K.concatenate([self.imaginary_kernel_f, self.real_kernel_f], axis=-1)],
+            axis=0
+        )
         self.real_kernel_c = self.real_kernel[:, self.units * 2: self.units * 3]
         self.imaginary_kernel_c = self.imaginary_kernel[:, self.units * 2: self.units * 3]
+        self.cat_kernel_c = K.concatenate(
+            [K.concatenate([self.real_kernel_c, -self.imaginary_kernel_c], axis=-1),
+             K.concatenate([self.imaginary_kernel_c, self.real_kernel_c], axis=-1)],
+            axis=0
+        )
         self.real_kernel_o = self.real_kernel[:, self.units * 3:]
         self.imaginary_kernel_o = self.imaginary_kernel[:, self.units * 3:]
+        self.cat_kernel_o = K.concatenate(
+            [K.concatenate([self.real_kernel_o, -self.imaginary_kernel_o], axis=-1),
+             K.concatenate([self.imaginary_kernel_o, self.real_kernel_o], axis=-1)],
+            axis=0
+        )
 
         self.real_recurrent_kernel_i = self.real_recurrent_kernel[:, :self.units]
         self.imaginary_recurrent_kernel_i = self.imaginary_recurrent_kernel[:, :self.units]
+        self.cat_recurrent_kernel_i = K.concatenate(
+            [K.concatenate([self.real_recurrent_kernel_i, -self.imaginary_recurrent_kernel_i], axis=-1),
+             K.concatenate([self.imaginary_recurrent_kernel_i, self.real_recurrent_kernel_i], axis=-1)],
+            axis=0
+        )
+
         self.real_recurrent_kernel_f = self.real_recurrent_kernel[:, self.units: self.units * 2]
         self.imaginary_recurrent_kernel_f = self.imaginary_recurrent_kernel[:, self.units: self.units * 2]
+        self.cat_recurrent_kernel_f = K.concatenate(
+            [K.concatenate([self.real_recurrent_kernel_f, -self.imaginary_recurrent_kernel_f], axis=-1),
+             K.concatenate([self.imaginary_recurrent_kernel_f, self.real_recurrent_kernel_f], axis=-1)],
+            axis=0
+        )
         self.real_recurrent_kernel_c = self.real_recurrent_kernel[:, self.units * 2: self.units * 3]
         self.imaginary_recurrent_kernel_c = self.imaginary_recurrent_kernel[:, self.units * 2: self.units * 3]
+        self.cat_recurrent_kernel_c = K.concatenate(
+            [K.concatenate([self.real_recurrent_kernel_c, -self.imaginary_recurrent_kernel_c], axis=-1),
+             K.concatenate([self.imaginary_recurrent_kernel_c, self.real_recurrent_kernel_c], axis=-1)],
+            axis=0
+        )
         self.real_recurrent_kernel_o = self.real_recurrent_kernel[:, self.units * 3:]
         self.imaginary_recurrent_kernel_o = self.imaginary_recurrent_kernel[:, self.units * 3:]
+        self.cat_recurrent_kernel_o = K.concatenate(
+            [K.concatenate([self.real_recurrent_kernel_o, -self.imaginary_recurrent_kernel_o], axis=-1),
+             K.concatenate([self.imaginary_recurrent_kernel_o, self.real_recurrent_kernel_o], axis=-1)],
+            axis=0
+        )
 
         if self.use_bias:
             self.real_bias_i = self.real_bias[:self.units]
             self.imaginary_bias_i = self.imaginary_bias[:self.units]
+            self.cat_bias_i = K.concatenate([self.real_bias_i, self.imaginary_bias_i],
+                                       axis=0)
             self.real_bias_f = self.real_bias[self.units: self.units * 2]
             self.imaginary_bias_f = self.imaginary_bias[self.units: self.units * 2]
+            self.cat_bias_f = K.concatenate([self.real_bias_f, self.imaginary_bias_f],
+                                       axis=0)
             self.real_bias_c = self.real_bias[self.units * 2: self.units * 3]
             self.imaginary_bias_c = self.imaginary_bias[self.units * 2: self.units * 3]
+            self.cat_bias_c = K.concatenate([self.real_bias_c, self.imaginary_bias_c],
+                                       axis=0)
             self.real_bias_o = self.real_bias[self.units * 3:]
             self.imaginary_bias_o = self.imaginary_bias[self.units * 3:]
+            self.cat_bias_o = K.concatenate([self.real_bias_o, self.imaginary_bias_o],
+                                       axis=0)
         else:
             self.real_bias_i = None
             self.imaginary_bias_i = None
+            self.cat_bias_i = None
+
             self.real_bias_f = None
             self.imaginary_bias_f = None
+            self.cat_bias_f = None
+
             self.real_bias_c = None
             self.imaginary_bias_c = None
+            self.cat_bias_c = None
+
             self.real_bias_o = None
             self.imaginary_bias_o = None
+            self.cat_bias_o = None
         self.built = True
 
     def call(self, inputs, states, training=None):
@@ -956,44 +1012,20 @@ class CLSTMCell(Layer):
                 inputs_f = inputs
                 inputs_c = inputs
                 inputs_o = inputs
-            cat_kernel_i = K.concatenate(
-                [K.concatenate([self.real_kernel_i, -self.imaginary_kernel_i], axis=-1),
-                 K.concatenate([self.imaginary_kernel_i, self.real_kernel_i], axis=-1)],
-                axis=0
-            )
-            cat_kernel_f = K.concatenate(
-                [K.concatenate([self.real_kernel_f, -self.imaginary_kernel_f], axis=-1),
-                 K.concatenate([self.imaginary_kernel_f, self.real_kernel_f], axis=-1)],
-                axis=0
-            )
-            cat_kernel_c = K.concatenate(
-                [K.concatenate([self.real_kernel_c, -self.imaginary_kernel_c], axis=-1),
-                 K.concatenate([self.imaginary_kernel_c, self.real_kernel_c], axis=-1)],
-                axis=0
-            )
-            cat_kernel_o = K.concatenate(
-                [K.concatenate([self.real_kernel_o, -self.imaginary_kernel_o], axis=-1),
-                 K.concatenate([self.imaginary_kernel_o, self.real_kernel_o], axis=-1)],
-                axis=0
-            )
 
-            x_i = K.dot(inputs_i, cat_kernel_i)
-            x_f = K.dot(inputs_f, cat_kernel_f)
-            x_c = K.dot(inputs_c, cat_kernel_c)
-            x_o = K.dot(inputs_o, cat_kernel_o)
+            x_i = K.dot(inputs_i, self.cat_kernel_i)
+            x_f = K.dot(inputs_f, self.cat_kernel_f)
+            x_c = K.dot(inputs_c, self.cat_kernel_c)
+            x_o = K.dot(inputs_o, self.cat_kernel_o)
             if self.use_bias:
-                cat_bias_i = K.concatenate([self.real_bias_i, self.imaginary_bias_i],
-                                           axis=0)
-                x_i = K.bias_add(x_i, cat_bias_i)
-                cat_bias_f = K.concatenate([self.real_bias_f, self.imaginary_bias_f],
-                                           axis=0)
-                x_f = K.bias_add(x_f, cat_bias_f)
-                cat_bias_c = K.concatenate([self.real_bias_c, self.imaginary_bias_c],
-                                           axis=0)
-                x_c = K.bias_add(x_c, cat_bias_c)
-                cat_bias_o = K.concatenate([self.real_bias_o, self.imaginary_bias_o],
-                                           axis=0)
-                x_o = K.bias_add(x_o, cat_bias_o)
+
+                x_i = K.bias_add(x_i, self.cat_bias_i)
+
+                x_f = K.bias_add(x_f, self.cat_bias_f)
+
+                x_c = K.bias_add(x_c, self.cat_bias_c)
+
+                x_o = K.bias_add(x_o, self.cat_bias_o)
 
             if 0 < self.recurrent_dropout < 1.:
                 h_tm1_i = h_tm1 * rec_dp_mask[0]
@@ -1005,32 +1037,13 @@ class CLSTMCell(Layer):
                 h_tm1_f = h_tm1
                 h_tm1_c = h_tm1
                 h_tm1_o = h_tm1
-            cat_recurrent_kernel_i = K.concatenate(
-                [K.concatenate([self.real_recurrent_kernel_i, -self.imaginary_recurrent_kernel_i], axis=-1),
-                 K.concatenate([self.imaginary_recurrent_kernel_i, self.real_recurrent_kernel_i], axis=-1)],
-                axis=0
-            )
-            cat_recurrent_kernel_f = K.concatenate(
-                [K.concatenate([self.real_recurrent_kernel_f, -self.imaginary_recurrent_kernel_f], axis=-1),
-                 K.concatenate([self.imaginary_recurrent_kernel_f, self.real_recurrent_kernel_f], axis=-1)],
-                axis=0
-            )
-            cat_recurrent_kernel_c = K.concatenate(
-                [K.concatenate([self.real_recurrent_kernel_c, -self.imaginary_recurrent_kernel_c], axis=-1),
-                 K.concatenate([self.imaginary_recurrent_kernel_c, self.real_recurrent_kernel_c], axis=-1)],
-                axis=0
-            )
-            cat_recurrent_kernel_o = K.concatenate(
-                [K.concatenate([self.real_recurrent_kernel_o, -self.imaginary_recurrent_kernel_o], axis=-1),
-                 K.concatenate([self.imaginary_recurrent_kernel_o, self.real_recurrent_kernel_o], axis=-1)],
-                axis=0
-            )
-            i = self.recurrent_activation(x_i + K.dot(h_tm1_i, cat_recurrent_kernel_i))
-            f = self.recurrent_activation(x_f + K.dot(h_tm1_f, cat_recurrent_kernel_f))
+
+            i = self.recurrent_activation(x_i + K.dot(h_tm1_i, self.cat_recurrent_kernel_i))
+            f = self.recurrent_activation(x_f + K.dot(h_tm1_f, self.cat_recurrent_kernel_f))
             c = c_elem_mult(f, c_tm1, self.units) \
                 + c_elem_mult(i, self.activation(x_c + K.dot(h_tm1_c,
-                                                             cat_recurrent_kernel_c)), self.units)
-            o = self.recurrent_activation(x_o + K.dot(h_tm1_o, cat_recurrent_kernel_o))
+                                                             self.cat_recurrent_kernel_c)), self.units)
+            o = self.recurrent_activation(x_o + K.dot(h_tm1_o, self.cat_recurrent_kernel_o))
         else:
             # TODO: implement the second version as seen in keras
             None
