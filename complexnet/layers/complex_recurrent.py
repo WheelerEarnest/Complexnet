@@ -198,7 +198,7 @@ class SimpleCRNNCell(Layer):
         self._recurrent_dropout_mask = None
 
     def build(self, input_shape):
-
+        assert input_shape % 2 == 0
         input_dim = input_shape[-1] // 2
 
         self.real_kernel = self.add_weight(shape=(input_dim, self.units),
@@ -831,6 +831,7 @@ class CLSTMCell(Layer):
         self._recurrent_dropout_mask = None
 
     def build(self, input_shape):
+        assert input_shape[-1] % 2 == 0
         input_dim = input_shape[-1] // 2
         self.real_kernel = self.add_weight(shape=(input_dim, self.units * 4),
                                            name='real_kernel',
